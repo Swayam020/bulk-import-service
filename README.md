@@ -57,6 +57,8 @@ One milestone per sitting, one commit per real day.
 | M6 | Error report — collected failures keyed by line number, downloadable | `GET /imports/{id}/errors` returns a usable CSV |
 | M7 | Crash recovery — persisted progress, resume or clean fail | `kill -9` mid-import, restart, correct state |
 | M8 | Dockerfile, `compose.yaml`, README with the sequence diagram | Runs from a clean clone |
+| M9 | Frontend — upload a file, watch job status, download the error report | A 200k-row file can be uploaded and tracked from a browser |
+| M10 | Deploy — backend + frontend, each with a live URL | README updated with both |
 
 **M4 and M5 are the interesting ones.** M4 is where you learn why `Files.readAllLines()` is a
 trap, and M5 is where you learn what `@Transactional` actually scopes. Don't rush past them
