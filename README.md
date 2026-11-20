@@ -6,7 +6,7 @@ come back as a downloadable error report keyed by line number.
 
 **Stack:** Java 17 · Spring Boot · PostgreSQL · Spring Data JPA · Docker · JUnit 5
 
-**Status:** not started · target start after the ledger reaches M3
+**Status:** M0 done — Spring Boot 4.1 app boots against Postgres 17, `/actuator/health` reports `db: UP`
 
 ---
 
@@ -66,27 +66,24 @@ to get to the Docker milestone.
 
 ---
 
-## Setup
+## Run locally
 
-Java 25 is installed, Maven is not — use the Initializr wrapper. Container runtime is podman.
-
-```bash
-cd ~/projects/bulk-import-service
-curl -G https://start.spring.io/starter.zip \
-  -d type=maven-project -d language=java -d javaVersion=17 \
-  -d groupId=com.swayam -d artifactId=bulkimport -d name=bulkimport \
-  -d packageName=com.swayam.bulkimport \
-  -d dependencies=web,data-jpa,postgresql,validation,actuator \
-  -o starter.zip && unzip starter.zip && rm starter.zip
-```
+Java 17+ and podman. No Maven install needed — the wrapper fetches it.
 
 ```bash
-podman run -d --name import-pg -p 5433:5432 \
-  -e POSTGRES_PASSWORD=import -e POSTGRES_DB=import docker.io/library/postgres:17
+podman compose up -d db      # Postgres 17 on localhost:5433
+./mvnw spring-boot:run       # app on localhost:8080
+curl localhost:8080/actuator/health
 ```
 
 > Port **5433** on purpose — the ledger's Postgres already holds 5432. Two projects, two
 > databases, both running at once.
+
+Tests start their own throwaway Postgres via Testcontainers, so they don't need compose:
+
+```bash
+./mvnw test
+```
 
 Generate a test file when you get to M4:
 
@@ -95,13 +92,7 @@ python3 -c "
 print('id,name,email,amount')
 for i in range(200000):
     print(f'{i},user{i},user{i}@example.com,{i%997}.{i%100:02d}')
-" > /tmp/big.csv
+" > big.csv
 ```
 
 Then corrupt a few lines by hand — that's your M5 test input.
-
-## Git
-
-```bash
-git add -A && git commit -m "docs: project spec and build plan"
-```
