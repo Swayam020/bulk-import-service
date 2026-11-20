@@ -9,3 +9,4 @@ target/
 .env
 application-local.properties
 starter.zip
+big.csv
