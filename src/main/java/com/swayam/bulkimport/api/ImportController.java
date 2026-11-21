@@ -4,6 +4,8 @@ import com.swayam.bulkimport.importjob.ImportJob;
 import com.swayam.bulkimport.importjob.ImportService;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -11,6 +13,7 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.net.URI;
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/imports")
@@ -32,6 +35,11 @@ public class ImportController {
 		return ResponseEntity.accepted()
 				.location(URI.create("/api/imports/" + job.getId()))
 				.body(Dtos.ImportAccepted.from(job));
+	}
+
+	@GetMapping("/{id}")
+	public Dtos.ImportJobView status(@PathVariable UUID id) {
+		return Dtos.ImportJobView.from(importService.find(id));
 	}
 
 }

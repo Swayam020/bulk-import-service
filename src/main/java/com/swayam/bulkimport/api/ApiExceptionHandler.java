@@ -1,10 +1,12 @@
 package com.swayam.bulkimport.api;
 
+import com.swayam.bulkimport.importjob.ImportJobNotFoundException;
 import com.swayam.bulkimport.importjob.ImportRejectedException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.multipart.support.MissingServletRequestPartException;
 
@@ -16,6 +18,16 @@ class ApiExceptionHandler {
 	@ExceptionHandler(ImportRejectedException.class)
 	ResponseEntity<Dtos.ApiError> handleImportRejected(ImportRejectedException e) {
 		return error(HttpStatus.BAD_REQUEST, e.getMessage());
+	}
+
+	@ExceptionHandler(ImportJobNotFoundException.class)
+	ResponseEntity<Dtos.ApiError> handleImportJobNotFound(ImportJobNotFoundException e) {
+		return error(HttpStatus.NOT_FOUND, e.getMessage());
+	}
+
+	@ExceptionHandler(MethodArgumentTypeMismatchException.class)
+	ResponseEntity<Dtos.ApiError> handleBadJobId(MethodArgumentTypeMismatchException e) {
+		return error(HttpStatus.BAD_REQUEST, "invalid job id");
 	}
 
 	@ExceptionHandler(MissingServletRequestPartException.class)

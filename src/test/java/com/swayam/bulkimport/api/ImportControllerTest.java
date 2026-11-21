@@ -3,6 +3,7 @@ package com.swayam.bulkimport.api;
 import com.swayam.bulkimport.TestcontainersConfiguration;
 import com.swayam.bulkimport.importjob.ImportJob;
 import com.swayam.bulkimport.importjob.ImportJobRepository;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -12,9 +13,12 @@ import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.web.servlet.MockMvc;
 import tools.jackson.databind.ObjectMapper;
 
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -31,6 +35,15 @@ class ImportControllerTest {
 	@Autowired MockMvc mvc;
 	@Autowired ImportJobRepository jobs;
 	@Autowired ObjectMapper json;
+
+	private final List<Path> storedFiles = new ArrayList<>();
+
+	@AfterEach
+	void deleteStoredFiles() throws IOException {
+		for (Path path : storedFiles) {
+			Files.deleteIfExists(path);
+		}
+	}
 
 	@Test
 	void acceptsACsvAndReturns202WithAJobId() throws Exception {
@@ -55,9 +68,8 @@ class ImportControllerTest {
 		assertThat(job.get().getStatus().name()).isEqualTo("QUEUED");
 		assertThat(job.get().getSizeBytes()).isEqualTo(22);
 		Path stored = Path.of(job.get().getStoredPath());
+		storedFiles.add(stored);
 		assertThat(Files.readAllBytes(stored)).isEqualTo(content);
-
-		Files.deleteIfExists(stored);
 	}
 
 	@Test
@@ -72,12 +84,11 @@ class ImportControllerTest {
 		UUID jobId = UUID.fromString(json.readTree(body).get("jobId").asString());
 		ImportJob job = jobs.findById(jobId).orElseThrow();
 		Path stored = Path.of(job.getStoredPath());
+		storedFiles.add(stored);
 
 		assertThat(stored.getFileName().toString()).doesNotContain("evil");
 		assertThat(stored.getFileName().toString()).endsWith(".csv");
 		assertThat(stored.getParent()).isEqualTo(Path.of("data/uploads").toAbsolutePath());
-
-		Files.deleteIfExists(stored);
 	}
 
 	@Test
@@ -97,9 +108,8 @@ class ImportControllerTest {
 		UUID jobId = UUID.fromString(json.readTree(body).get("jobId").asString());
 		ImportJob job = jobs.findById(jobId).orElseThrow();
 		Path stored = Path.of(job.getStoredPath());
+		storedFiles.add(stored);
 		assertThat(Files.size(stored)).isEqualTo(content.length);
-
-		Files.deleteIfExists(stored);
 	}
 
 	@Test
@@ -139,7 +149,7 @@ class ImportControllerTest {
 
 		UUID jobId = UUID.fromString(json.readTree(body).get("jobId").asString());
 		ImportJob job = jobs.findById(jobId).orElseThrow();
-		Files.deleteIfExists(Path.of(job.getStoredPath()));
+		storedFiles.add(Path.of(job.getStoredPath()));
 	}
 
 	@Test

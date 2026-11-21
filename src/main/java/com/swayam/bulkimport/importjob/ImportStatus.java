@@ -1,5 +1,10 @@
 package com.swayam.bulkimport.importjob;
 
 public enum ImportStatus {
-	QUEUED
+	QUEUED, RUNNING, COMPLETED, FAILED;
+
+	public boolean isTerminal() {
+		return this == COMPLETED || this == FAILED;
+	}
+
 }

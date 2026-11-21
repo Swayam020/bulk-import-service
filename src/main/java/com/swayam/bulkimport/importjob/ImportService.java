@@ -5,6 +5,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.nio.file.Path;
 import java.util.Locale;
+import java.util.UUID;
 
 @Service
 public class ImportService {
@@ -34,6 +35,10 @@ public class ImportService {
 			storage.deleteQuietly(stored);
 			throw e;
 		}
+	}
+
+	public ImportJob find(UUID id) {
+		return jobs.findById(id).orElseThrow(() -> new ImportJobNotFoundException(id));
 	}
 
 }
