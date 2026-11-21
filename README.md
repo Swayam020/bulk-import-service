@@ -6,7 +6,7 @@ come back as a downloadable error report keyed by line number.
 
 **Stack:** Java 17 · Spring Boot · PostgreSQL · Spring Data JPA · Docker · JUnit 5
 
-**Status:** M0 done — Spring Boot 4.1 app boots against Postgres 17, `/actuator/health` reports `db: UP`
+**Status:** M1 done — `POST /api/imports` streams the CSV to disk, records a QUEUED job, returns `202` + job ID
 
 ---
 
@@ -49,7 +49,7 @@ One milestone per sitting, one commit per real day.
 | # | Milestone | Done when |
 |---|---|---|
 | M0 | Scaffold + Postgres + `/actuator/health` | App boots against a real Postgres |
-| M1 | `POST /imports` accepts multipart CSV, stores the file, returns `202` + job ID | Response is immediate regardless of file size |
+| M1 | `POST /api/imports` accepts multipart CSV, stores the file, returns `202` + job ID | Response is immediate regardless of file size |
 | M2 | `ImportJob` entity — status, counts, timestamps; `GET /imports/{id}` polling endpoint | Status transitions are visible over HTTP |
 | M3 | Background worker picks up queued jobs and imports them | End-to-end works on a small clean file |
 | M4 | Streaming parse — never hold the whole file in memory | Verified with a generated 200k-row file |

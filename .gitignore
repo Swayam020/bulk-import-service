@@ -10,3 +10,4 @@ target/
 application-local.properties
 starter.zip
 big.csv
+data/
