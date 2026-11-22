@@ -6,7 +6,7 @@ come back as a downloadable error report keyed by line number.
 
 **Stack:** Java 17 · Spring Boot · PostgreSQL · Spring Data JPA · Docker · JUnit 5
 
-**Status:** M3 done — a background worker imports queued `id,name,email,amount` files into a `customer` table; for now one bad row fails the whole job (partial success arrives in M5)
+**Status:** M4 done — the worker streams the CSV and flushes every 500 rows, so memory stays flat; a generated 200k-row file imports end to end (one bad row still fails the whole job until M5)
 
 ---
 
