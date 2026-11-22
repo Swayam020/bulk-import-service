@@ -1,10 +1,12 @@
 package com.swayam.bulkimport.importjob;
 
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.nio.file.Path;
 import java.util.Locale;
+import java.util.Optional;
 import java.util.UUID;
 
 @Service
@@ -39,6 +41,19 @@ public class ImportService {
 
 	public ImportJob find(UUID id) {
 		return jobs.findById(id).orElseThrow(() -> new ImportJobNotFoundException(id));
+	}
+
+	@Transactional
+	public Optional<ImportJob> claimNext() {
+		// dirty checking writes RUNNING when this short transaction commits, before the import starts
+		Optional<ImportJob> next = jobs.lockNextQueued();
+		next.ifPresent(ImportJob::start);
+		return next;
+	}
+
+	@Transactional
+	public void markFailed(UUID id, String message) {
+		find(id).fail(message);
 	}
 
 }
