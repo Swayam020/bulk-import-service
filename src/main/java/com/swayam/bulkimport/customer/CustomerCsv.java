@@ -34,6 +34,11 @@ public final class CustomerCsv {
 	}
 
 	public static Customer parseRow(UUID importJobId, String line, long lineNumber) {
+		// Postgres text columns reject NUL, and it would fail the whole batch at insert instead
+		// of this one row
+		if (line.indexOf('\0') >= 0) {
+			throw new InvalidRowException(lineNumber, "row contains a NUL character");
+		}
 		String[] fields = line.split(",", -1);
 		if (fields.length != 4) {
 			throw new InvalidRowException(lineNumber, "expected 4 fields but found " + fields.length);

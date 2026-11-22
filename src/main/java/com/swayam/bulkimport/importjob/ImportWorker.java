@@ -29,7 +29,7 @@ public class ImportWorker {
 
 	/**
 	 * Returns false when nothing was queued. Public so tests can drive the worker without the
-	 * scheduler. The transactional work lives on ImportService/CsvImporter because
+	 * scheduler. The transactional work lives on ImportService/ImportBatchWriter because
 	 * {@code @Transactional} only applies through the Spring proxy, i.e. on calls from another bean.
 	 */
 	public boolean processNext() {
@@ -40,6 +40,7 @@ public class ImportWorker {
 		UUID id = claimed.get().getId();
 		try {
 			importer.importFile(id);
+			importService.markCompleted(id);
 		} catch (InvalidRowException | ImportFailedException e) {
 			importService.markFailed(id, e.getMessage());
 		} catch (RuntimeException e) {
