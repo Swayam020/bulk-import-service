@@ -6,7 +6,7 @@ come back as a downloadable error report keyed by line number.
 
 **Stack:** Java 17 · Spring Boot · PostgreSQL · Spring Data JPA · Docker · JUnit 5
 
-**Status:** M2 done — jobs move QUEUED → RUNNING → COMPLETED/FAILED with row counts and timestamps, polled at `GET /api/imports/{id}`
+**Status:** M3 done — a background worker imports queued `id,name,email,amount` files into a `customer` table; for now one bad row fails the whole job (partial success arrives in M5)
 
 ---
 
