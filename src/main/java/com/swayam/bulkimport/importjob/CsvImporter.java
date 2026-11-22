@@ -2,10 +2,8 @@ package com.swayam.bulkimport.importjob;
 
 import com.swayam.bulkimport.customer.Customer;
 import com.swayam.bulkimport.customer.CustomerCsv;
-import com.swayam.bulkimport.customer.CustomerRepository;
-import jakarta.persistence.EntityManager;
+import com.swayam.bulkimport.customer.InvalidRowException;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -20,34 +18,34 @@ import java.util.UUID;
 @Component
 public class CsvImporter {
 
-	// matches hibernate.jdbc.batch_size, and bounds how many rows are held in memory at once
-	static final int FLUSH_SIZE = 500;
+	// lines per transaction; matches hibernate.jdbc.batch_size, so each batch's inserts go to
+	// Postgres as one JDBC batch
+	static final int BATCH_SIZE = 500;
 
 	private final ImportJobRepository jobs;
-	private final CustomerRepository customers;
-	private final EntityManager entityManager;
+	private final ImportBatchWriter batchWriter;
 
-	public CsvImporter(ImportJobRepository jobs, CustomerRepository customers, EntityManager entityManager) {
+	public CsvImporter(ImportJobRepository jobs, ImportBatchWriter batchWriter) {
 		this.jobs = jobs;
-		this.customers = customers;
-		this.entityManager = entityManager;
+		this.batchWriter = batchWriter;
 	}
 
 	/**
-	 * One transaction for the whole file, so the rows and the COMPLETED status commit together,
-	 * or any exception rolls everything back, including rows already flushed; the file is
-	 * streamed and flushed every {@code FLUSH_SIZE} rows so memory stays flat however big it is.
-	 * M5 replaces the single transaction with per-batch transactions.
+	 * Streams the file and commits every {@code BATCH_SIZE} lines in its own transaction via
+	 * {@link ImportBatchWriter}, so a row that fails validation is counted and skipped instead
+	 * of rolling back the file, and memory stays flat; there is deliberately no transaction
+	 * around this method; if the file itself becomes unreadable part-way, the batches already
+	 * committed stay and the job's counts say how many. A job that ends COMPLETED has processed
+	 * every line; {@code rowsFailed} counts the lines that were not saved.
 	 */
-	@Transactional
 	public void importFile(UUID jobId) {
-		Path path = Path.of(findJob(jobId).getStoredPath());
-		long imported = 0;
+		Path path = Path.of(jobs.findById(jobId).orElseThrow(() -> new ImportJobNotFoundException(jobId)).getStoredPath());
 		try (BufferedReader reader = Files.newBufferedReader(path, StandardCharsets.UTF_8)) {
 			String header = reader.readLine();
 			CustomerCsv.checkHeader(header == null ? "" : header);
 
-			List<Customer> chunk = new ArrayList<>(FLUSH_SIZE);
+			List<Customer> batch = new ArrayList<>(BATCH_SIZE);
+			int failed = 0;
 			long lineNumber = 1;
 			String line;
 			while ((line = reader.readLine()) != null) {
@@ -55,35 +53,25 @@ public class CsvImporter {
 				if (line.isBlank()) {
 					continue;
 				}
-				chunk.add(CustomerCsv.parseRow(jobId, line, lineNumber));
-				if (chunk.size() == FLUSH_SIZE) {
-					imported += writeChunk(chunk);
+				try {
+					batch.add(CustomerCsv.parseRow(jobId, line, lineNumber));
+				} catch (InvalidRowException e) {
+					failed++;
+				}
+				if (batch.size() + failed == BATCH_SIZE) {
+					batchWriter.write(jobId, batch, failed);
+					batch.clear();
+					failed = 0;
 				}
 			}
-			imported += writeChunk(chunk);
+			if (!batch.isEmpty() || failed > 0) {
+				batchWriter.write(jobId, batch, failed);
+			}
 		} catch (MalformedInputException e) {
 			throw new ImportFailedException("file is not valid UTF-8");
 		} catch (IOException e) {
 			throw new ImportFailedException("stored file could not be read");
 		}
-
-		// clear() detached the job loaded above, so changes to that instance would never be written
-		ImportJob job = findJob(jobId);
-		job.recordProgress(imported, 0);
-		job.complete();
-	}
-
-	private ImportJob findJob(UUID jobId) {
-		return jobs.findById(jobId).orElseThrow(() -> new ImportJobNotFoundException(jobId));
-	}
-
-	private int writeChunk(List<Customer> chunk) {
-		customers.saveAll(chunk);
-		entityManager.flush();
-		entityManager.clear();
-		int written = chunk.size();
-		chunk.clear();
-		return written;
 	}
 
 }

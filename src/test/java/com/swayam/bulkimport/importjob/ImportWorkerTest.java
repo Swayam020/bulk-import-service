@@ -102,17 +102,46 @@ class ImportWorkerTest {
 	}
 
 	@Test
-	void aBadRowFailsTheWholeJobAndSavesNothing() throws Exception {
+	void aBadRowFailsAloneAndTheGoodRowsPersist() throws Exception {
 		UUID id = upload("id,name,email,amount\n1,Alice,alice@example.com,10.50\n2,Bob,bob@example.com,ten\n");
 
 		drainQueue();
 
 		ImportJob job = jobs.findById(id).orElseThrow();
-		assertThat(job.getStatus()).isEqualTo(ImportStatus.FAILED);
-		assertThat(job.getErrorMessage()).isEqualTo("line 3: amount must be a number");
+		assertThat(job.getStatus()).isEqualTo(ImportStatus.COMPLETED);
+		assertThat(job.getRowsSucceeded()).isEqualTo(1);
+		assertThat(job.getRowsFailed()).isEqualTo(1);
+		assertThat(job.getErrorMessage()).isNull();
+		List<Customer> saved = customers.findByImportJobIdOrderByExternalIdAsc(id);
+		assertThat(saved).hasSize(1);
+		assertThat(saved.get(0).getExternalId()).isEqualTo(1);
+		assertThat(saved.get(0).getName()).isEqualTo("Alice");
+	}
+
+	@Test
+	void aFileOfOnlyBadRowsCompletesWithThemCounted() throws Exception {
+		UUID id = upload("id,name,email,amount\n1,Alice,alice@example.com,ten\n");
+
+		drainQueue();
+
+		ImportJob job = jobs.findById(id).orElseThrow();
+		assertThat(job.getStatus()).isEqualTo(ImportStatus.COMPLETED);
 		assertThat(job.getRowsSucceeded()).isZero();
-		assertThat(job.getStartedAt()).isNotNull();
+		assertThat(job.getRowsFailed()).isEqualTo(1);
 		assertThat(customers.countByImportJobId(id)).isZero();
+	}
+
+	@Test
+	void aNulCharacterFailsOnlyThatRow() throws Exception {
+		UUID id = upload("id,name,email,amount\n1,Alice,alice@example.com,10.50\n2,B\u0000b,bob@example.com,1\n3,Carol,carol@example.com,2\n");
+
+		drainQueue();
+
+		ImportJob job = jobs.findById(id).orElseThrow();
+		assertThat(job.getStatus()).isEqualTo(ImportStatus.COMPLETED);
+		assertThat(job.getRowsSucceeded()).isEqualTo(2);
+		assertThat(job.getRowsFailed()).isEqualTo(1);
+		assertThat(customers.countByImportJobId(id)).isEqualTo(2);
 	}
 
 	@Test

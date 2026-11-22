@@ -74,6 +74,13 @@ class CustomerCsvTest {
 	}
 
 	@Test
+	void rejectsANulCharacter() {
+		assertThatThrownBy(() -> CustomerCsv.parseRow(jobId, "1,B\u0000b,bob@example.com,1", 7))
+				.isInstanceOf(InvalidRowException.class)
+				.hasMessage("line 7: row contains a NUL character");
+	}
+
+	@Test
 	void exposesLineNumberAndReasonSeparately() {
 		assertThatThrownBy(() -> CustomerCsv.parseRow(jobId, "1,Alice,alice@example.com,ten", 9))
 				.isInstanceOfSatisfying(InvalidRowException.class, e -> {
@@ -93,7 +100,7 @@ class CustomerCsvTest {
 	void acceptsTheHeaderIgnoringCaseSpacesAndABom() {
 		assertThatCode(() -> CustomerCsv.checkHeader("id,name,email,amount")).doesNotThrowAnyException();
 		assertThatCode(() -> CustomerCsv.checkHeader("ID, Name , Email,AMOUNT")).doesNotThrowAnyException();
-		assertThatCode(() -> CustomerCsv.checkHeader("﻿id,name,email,amount")).doesNotThrowAnyException();
+		assertThatCode(() -> CustomerCsv.checkHeader("\uFEFFid,name,email,amount")).doesNotThrowAnyException();
 	}
 
 	@Test

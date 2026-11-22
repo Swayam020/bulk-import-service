@@ -52,6 +52,11 @@ public class ImportService {
 	}
 
 	@Transactional
+	public void markCompleted(UUID id) {
+		find(id).complete();
+	}
+
+	@Transactional
 	public void markFailed(UUID id, String message) {
 		find(id).fail(message);
 	}
