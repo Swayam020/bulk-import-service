@@ -8,6 +8,7 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
+import org.hibernate.annotations.ColumnDefault;
 
 import java.time.Instant;
 import java.util.Objects;
@@ -42,6 +43,17 @@ public class ImportJob {
 
 	@Column(name = "rows_failed", nullable = false)
 	private long rowsFailed;
+
+	// file line number (header = 1) of the last line covered by a committed batch; a resumed run
+	// skips up to here. The column defaults (here and on attempts) let ddl-auto=update add these
+	// NOT NULL columns to a table that already has rows
+	@ColumnDefault("0")
+	@Column(name = "last_committed_line", nullable = false)
+	private long lastCommittedLine;
+
+	@ColumnDefault("0")
+	@Column(nullable = false)
+	private int attempts;
 
 	@Column(name = "started_at")
 	private Instant startedAt;
@@ -103,6 +115,14 @@ public class ImportJob {
 		return rowsSucceeded + rowsFailed;
 	}
 
+	public long getLastCommittedLine() {
+		return lastCommittedLine;
+	}
+
+	public int getAttempts() {
+		return attempts;
+	}
+
 	public Instant getStartedAt() {
 		return startedAt;
 	}
@@ -120,20 +140,37 @@ public class ImportJob {
 			throw new IllegalStateException("cannot start a " + status + " job");
 		}
 		status = ImportStatus.RUNNING;
-		startedAt = Instant.now();
+		attempts++;
+		// kept from the first start, so a resumed job's duration covers the whole import
+		if (startedAt == null) {
+			startedAt = Instant.now();
+		}
 	}
 
-	// adds to the running totals rather than replacing them, since M5 calls this once per
-	// committed batch
-	public void recordProgress(long succeeded, long failed) {
+	// adds to the running totals once per committed batch; a resumed run that replayed committed
+	// lines fails here instead of double-counting
+	public void recordProgress(long succeeded, long failed, long lastLine) {
 		if (succeeded < 0 || failed < 0) {
 			throw new IllegalArgumentException("row counts must not be negative");
 		}
 		if (status != ImportStatus.RUNNING) {
 			throw new IllegalStateException("cannot record progress on a " + status + " job");
 		}
+		if (lastLine <= lastCommittedLine) {
+			throw new IllegalStateException(
+					"batch ends at line " + lastLine + " but line " + lastCommittedLine + " is already committed");
+		}
 		rowsSucceeded += succeeded;
 		rowsFailed += failed;
+		lastCommittedLine = lastLine;
+	}
+
+	// back to the queue with its progress, so the next run resumes after lastCommittedLine
+	public void requeue() {
+		if (status != ImportStatus.RUNNING) {
+			throw new IllegalStateException("cannot requeue a " + status + " job");
+		}
+		status = ImportStatus.QUEUED;
 	}
 
 	public void complete() {

@@ -2,6 +2,8 @@ package com.swayam.bulkimport.importjob;
 
 import org.junit.jupiter.api.Test;
 
+import java.time.Instant;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -36,12 +38,52 @@ class ImportJobTest {
 		ImportJob job = new ImportJob("people.csv", "/nonexistent/people.csv", 22);
 		job.start();
 
-		job.recordProgress(8, 2);
-		job.recordProgress(5, 0);
+		job.recordProgress(8, 2, 11);
+		job.recordProgress(5, 0, 16);
 
 		assertThat(job.getRowsSucceeded()).isEqualTo(13);
 		assertThat(job.getRowsFailed()).isEqualTo(2);
 		assertThat(job.getRowsProcessed()).isEqualTo(15);
+		assertThat(job.getLastCommittedLine()).isEqualTo(16);
+	}
+
+	@Test
+	void startCountsAttemptsAndKeepsTheFirstStartedAt() {
+		ImportJob job = new ImportJob("people.csv", "/nonexistent/people.csv", 22);
+		job.start();
+		Instant first = job.getStartedAt();
+
+		job.requeue();
+		job.start();
+
+		assertThat(job.getAttempts()).isEqualTo(2);
+		assertThat(job.getStartedAt()).isEqualTo(first);
+	}
+
+	@Test
+	void requeueKeepsProgress() {
+		ImportJob job = new ImportJob("people.csv", "/nonexistent/people.csv", 22);
+		job.start();
+		job.recordProgress(8, 2, 11);
+
+		job.requeue();
+
+		assertThat(job.getStatus()).isEqualTo(ImportStatus.QUEUED);
+		assertThat(job.getRowsSucceeded()).isEqualTo(8);
+		assertThat(job.getRowsFailed()).isEqualTo(2);
+		assertThat(job.getLastCommittedLine()).isEqualTo(11);
+		assertThat(job.getFinishedAt()).isNull();
+	}
+
+	@Test
+	void recordProgressRejectsALineAlreadyCommitted() {
+		ImportJob job = new ImportJob("people.csv", "/nonexistent/people.csv", 22);
+		job.start();
+		job.recordProgress(5, 0, 6);
+
+		assertThatThrownBy(() -> job.recordProgress(1, 0, 6)).isInstanceOf(IllegalStateException.class)
+				.hasMessage("batch ends at line 6 but line 6 is already committed");
+		assertThat(job.getRowsSucceeded()).isEqualTo(5);
 	}
 
 	@Test
@@ -90,7 +132,7 @@ class ImportJobTest {
 				.hasMessage("cannot complete a QUEUED job");
 
 		ImportJob freshJob = new ImportJob("people.csv", "/nonexistent/people.csv", 22);
-		assertThatThrownBy(() -> freshJob.recordProgress(1, 0)).isInstanceOf(IllegalStateException.class)
+		assertThatThrownBy(() -> freshJob.recordProgress(1, 0, 2)).isInstanceOf(IllegalStateException.class)
 				.hasMessage("cannot record progress on a QUEUED job");
 
 		ImportJob runningJob = new ImportJob("people.csv", "/nonexistent/people.csv", 22);
@@ -108,6 +150,10 @@ class ImportJobTest {
 		failedJob.fail("boom");
 		assertThatThrownBy(failedJob::start).isInstanceOf(IllegalStateException.class)
 				.hasMessage("cannot start a FAILED job");
+
+		ImportJob queuedJob = new ImportJob("people.csv", "/nonexistent/people.csv", 22);
+		assertThatThrownBy(queuedJob::requeue).isInstanceOf(IllegalStateException.class)
+				.hasMessage("cannot requeue a QUEUED job");
 	}
 
 	@Test
@@ -115,7 +161,7 @@ class ImportJobTest {
 		ImportJob job = new ImportJob("people.csv", "/nonexistent/people.csv", 22);
 		job.start();
 
-		assertThatThrownBy(() -> job.recordProgress(-1, 0)).isInstanceOf(IllegalArgumentException.class)
+		assertThatThrownBy(() -> job.recordProgress(-1, 0, 2)).isInstanceOf(IllegalArgumentException.class)
 				.hasMessage("row counts must not be negative");
 	}
 

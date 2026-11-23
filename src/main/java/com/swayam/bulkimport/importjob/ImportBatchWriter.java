@@ -27,14 +27,16 @@ public class ImportBatchWriter {
 	 * together and a later failure never rolls back a batch that already committed; it is a
 	 * separate bean because {@code @Transactional} only applies to calls that come through the
 	 * Spring proxy, not from inside {@link CsvImporter}. The batch's row errors commit in the
-	 * same transaction, so the error report always matches {@code rowsFailed}.
+	 * same transaction, so the error report always matches {@code rowsFailed}. The job also
+	 * records the batch's last file line in this transaction, which is where an interrupted
+	 * import resumes.
 	 */
 	@Transactional
-	public void write(UUID jobId, List<Customer> rows, List<ImportRowError> errors) {
+	public void write(UUID jobId, List<Customer> rows, List<ImportRowError> errors, long lastLine) {
 		customers.saveAll(rows);
 		rowErrors.saveAll(errors);
 		jobs.findById(jobId).orElseThrow(() -> new ImportJobNotFoundException(jobId))
-				.recordProgress(rows.size(), errors.size());
+				.recordProgress(rows.size(), errors.size(), lastLine);
 	}
 
 }
