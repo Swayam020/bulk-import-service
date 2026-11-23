@@ -2,6 +2,9 @@ package com.swayam.bulkimport.api;
 
 import com.swayam.bulkimport.importjob.ImportJob;
 import com.swayam.bulkimport.importjob.ImportService;
+import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.http.ContentDisposition;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -12,7 +15,9 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
 import java.net.URI;
+import java.nio.charset.StandardCharsets;
 import java.util.UUID;
 
 @RestController
@@ -40,6 +45,21 @@ public class ImportController {
 	@GetMapping("/{id}")
 	public Dtos.ImportJobView status(@PathVariable UUID id) {
 		return Dtos.ImportJobView.from(importService.find(id));
+	}
+
+	/**
+	 * The job is checked before any header is set, so a 404/409 leaves as the usual JSON error
+	 * rather than a CSV download; the filename is the job id, never the client's filename; the
+	 * report is written page by page straight to the response.
+	 */
+	@GetMapping("/{id}/errors")
+	public void errors(@PathVariable UUID id, HttpServletResponse response) throws IOException {
+		importService.requireFinished(id);
+		response.setContentType("text/csv");
+		response.setCharacterEncoding(StandardCharsets.UTF_8.name());
+		response.setHeader(HttpHeaders.CONTENT_DISPOSITION,
+				ContentDisposition.attachment().filename(id + "-errors.csv").build().toString());
+		importService.writeErrorReport(id, response.getWriter());
 	}
 
 }

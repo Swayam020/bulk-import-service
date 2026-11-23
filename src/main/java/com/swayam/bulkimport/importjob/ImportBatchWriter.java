@@ -13,22 +13,28 @@ public class ImportBatchWriter {
 
 	private final ImportJobRepository jobs;
 	private final CustomerRepository customers;
+	private final ImportRowErrorRepository rowErrors;
 
-	public ImportBatchWriter(ImportJobRepository jobs, CustomerRepository customers) {
+	public ImportBatchWriter(ImportJobRepository jobs, CustomerRepository customers,
+			ImportRowErrorRepository rowErrors) {
 		this.jobs = jobs;
 		this.customers = customers;
+		this.rowErrors = rowErrors;
 	}
 
 	/**
 	 * Each batch is its own transaction, so its rows and the job's running counts commit
 	 * together and a later failure never rolls back a batch that already committed; it is a
 	 * separate bean because {@code @Transactional} only applies to calls that come through the
-	 * Spring proxy, not from inside {@link CsvImporter}.
+	 * Spring proxy, not from inside {@link CsvImporter}. The batch's row errors commit in the
+	 * same transaction, so the error report always matches {@code rowsFailed}.
 	 */
 	@Transactional
-	public void write(UUID jobId, List<Customer> rows, int failed) {
+	public void write(UUID jobId, List<Customer> rows, List<ImportRowError> errors) {
 		customers.saveAll(rows);
-		jobs.findById(jobId).orElseThrow(() -> new ImportJobNotFoundException(jobId)).recordProgress(rows.size(), failed);
+		rowErrors.saveAll(errors);
+		jobs.findById(jobId).orElseThrow(() -> new ImportJobNotFoundException(jobId))
+				.recordProgress(rows.size(), errors.size());
 	}
 
 }

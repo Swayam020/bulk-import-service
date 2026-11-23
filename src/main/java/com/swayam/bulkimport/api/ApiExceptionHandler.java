@@ -1,6 +1,7 @@
 package com.swayam.bulkimport.api;
 
 import com.swayam.bulkimport.importjob.ImportJobNotFoundException;
+import com.swayam.bulkimport.importjob.ImportNotFinishedException;
 import com.swayam.bulkimport.importjob.ImportRejectedException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -23,6 +24,11 @@ class ApiExceptionHandler {
 	@ExceptionHandler(ImportJobNotFoundException.class)
 	ResponseEntity<Dtos.ApiError> handleImportJobNotFound(ImportJobNotFoundException e) {
 		return error(HttpStatus.NOT_FOUND, e.getMessage());
+	}
+
+	@ExceptionHandler(ImportNotFinishedException.class)
+	ResponseEntity<Dtos.ApiError> handleImportNotFinished(ImportNotFinishedException e) {
+		return error(HttpStatus.CONFLICT, e.getMessage());
 	}
 
 	@ExceptionHandler(MethodArgumentTypeMismatchException.class)

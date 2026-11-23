@@ -45,7 +45,7 @@ public class CsvImporter {
 			CustomerCsv.checkHeader(header == null ? "" : header);
 
 			List<Customer> batch = new ArrayList<>(BATCH_SIZE);
-			int failed = 0;
+			List<ImportRowError> errors = new ArrayList<>();
 			long lineNumber = 1;
 			String line;
 			while ((line = reader.readLine()) != null) {
@@ -56,16 +56,16 @@ public class CsvImporter {
 				try {
 					batch.add(CustomerCsv.parseRow(jobId, line, lineNumber));
 				} catch (InvalidRowException e) {
-					failed++;
+					errors.add(new ImportRowError(jobId, e.getLineNumber(), e.getReason()));
 				}
-				if (batch.size() + failed == BATCH_SIZE) {
-					batchWriter.write(jobId, batch, failed);
+				if (batch.size() + errors.size() == BATCH_SIZE) {
+					batchWriter.write(jobId, batch, errors);
 					batch.clear();
-					failed = 0;
+					errors.clear();
 				}
 			}
-			if (!batch.isEmpty() || failed > 0) {
-				batchWriter.write(jobId, batch, failed);
+			if (!batch.isEmpty() || !errors.isEmpty()) {
+				batchWriter.write(jobId, batch, errors);
 			}
 		} catch (MalformedInputException e) {
 			throw new ImportFailedException("file is not valid UTF-8");
