@@ -20,6 +20,10 @@ public class ImportService {
 	// memory at once
 	static final int ERROR_PAGE_SIZE = 1000;
 
+	// a job interrupted this many times is failed instead of resumed, so a file that kills the
+	// process every time can't loop forever
+	static final int MAX_ATTEMPTS = 3;
+
 	private final ImportJobRepository jobs;
 	private final FileStorage storage;
 	private final ImportRowErrorRepository rowErrors;
@@ -69,6 +73,24 @@ public class ImportService {
 	@Transactional
 	public void markFailed(UUID id, String message) {
 		find(id).fail(message);
+	}
+
+	/**
+	 * Call before this process's worker claims anything. It assumes this process runs the only
+	 * worker, so a job still RUNNING was left by a process that died; with several instances this
+	 * would requeue a live job, which needs a heartbeat lease instead.
+	 */
+	@Transactional
+	public int recoverInterrupted() {
+		List<ImportJob> interrupted = jobs.findByStatus(ImportStatus.RUNNING);
+		for (ImportJob job : interrupted) {
+			if (job.getAttempts() >= MAX_ATTEMPTS) {
+				job.fail("import was interrupted " + job.getAttempts() + " times; giving up");
+			} else {
+				job.requeue();
+			}
+		}
+		return interrupted.size();
 	}
 
 	public void requireFinished(UUID id) {

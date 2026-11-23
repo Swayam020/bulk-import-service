@@ -75,7 +75,7 @@ class ImportStatusControllerTest {
 		mvc.perform(get("/api/imports/" + job.getId())).andExpect(jsonPath("$.status").value("QUEUED"));
 
 		job.start();
-		job.recordProgress(8, 2);
+		job.recordProgress(8, 2, 11);
 		jobs.save(job);
 
 		String runningBody = mvc.perform(get("/api/imports/" + job.getId()))

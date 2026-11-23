@@ -36,10 +36,14 @@ public class CsvImporter {
 	 * of rolling back the file, and memory stays flat; there is deliberately no transaction
 	 * around this method; if the file itself becomes unreadable part-way, the batches already
 	 * committed stay and the job's counts say how many. A job that ends COMPLETED has processed
-	 * every line; {@code rowsFailed} counts the lines that were not saved.
+	 * every line; {@code rowsFailed} counts the lines that were not saved. A resumed job skips the
+	 * lines its earlier run committed, so no row is saved or counted twice.
 	 */
 	public void importFile(UUID jobId) {
-		Path path = Path.of(jobs.findById(jobId).orElseThrow(() -> new ImportJobNotFoundException(jobId)).getStoredPath());
+		ImportJob job = jobs.findById(jobId).orElseThrow(() -> new ImportJobNotFoundException(jobId));
+		Path path = Path.of(job.getStoredPath());
+		// non-zero only when an earlier run of this job was interrupted; those lines are already committed
+		long resumeAfter = job.getLastCommittedLine();
 		try (BufferedReader reader = Files.newBufferedReader(path, StandardCharsets.UTF_8)) {
 			String header = reader.readLine();
 			CustomerCsv.checkHeader(header == null ? "" : header);
@@ -50,7 +54,7 @@ public class CsvImporter {
 			String line;
 			while ((line = reader.readLine()) != null) {
 				lineNumber++;
-				if (line.isBlank()) {
+				if (lineNumber <= resumeAfter || line.isBlank()) {
 					continue;
 				}
 				try {
@@ -59,13 +63,13 @@ public class CsvImporter {
 					errors.add(new ImportRowError(jobId, e.getLineNumber(), e.getReason()));
 				}
 				if (batch.size() + errors.size() == BATCH_SIZE) {
-					batchWriter.write(jobId, batch, errors);
+					batchWriter.write(jobId, batch, errors, lineNumber);
 					batch.clear();
 					errors.clear();
 				}
 			}
 			if (!batch.isEmpty() || !errors.isEmpty()) {
-				batchWriter.write(jobId, batch, errors);
+				batchWriter.write(jobId, batch, errors, lineNumber);
 			}
 		} catch (MalformedInputException e) {
 			throw new ImportFailedException("file is not valid UTF-8");

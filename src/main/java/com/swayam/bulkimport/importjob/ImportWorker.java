@@ -16,13 +16,29 @@ public class ImportWorker {
 	private final ImportService importService;
 	private final CsvImporter importer;
 
+	// set after the first poll's recovery; in the app only the scheduler thread calls poll(), one
+	// run at a time (tests call it directly with the scheduler off)
+	private boolean recovered;
+
 	public ImportWorker(ImportService importService, CsvImporter importer) {
 		this.importService = importService;
 		this.importer = importer;
 	}
 
+	/**
+	 * Recovery runs on the first poll, before anything is claimed: scheduled tasks start before the
+	 * application-ready event, so a startup listener could requeue a job this worker had just started.
+	 */
 	@Scheduled(fixedDelayString = "${app.import.worker.poll-delay-ms:1000}")
 	public void poll() {
+		if (!recovered) {
+			int count = importService.recoverInterrupted();
+			if (count > 0) {
+				log.warn("found {} import job(s) left RUNNING by a previous process; requeued them, or failed any interrupted {} times",
+						count, ImportService.MAX_ATTEMPTS);
+			}
+			recovered = true;
+		}
 		while (processNext()) {
 		}
 	}
