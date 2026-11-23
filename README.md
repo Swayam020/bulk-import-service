@@ -6,7 +6,7 @@ come back as a downloadable error report keyed by line number.
 
 **Stack:** Java 17 · Spring Boot · PostgreSQL · Spring Data JPA · Docker · JUnit 5
 
-**Status:** M5 done: each 500-line batch commits in its own transaction, so a bad row is counted and skipped while the good rows persist; a file that breaks part-way keeps the batches already committed
+**Status:** M6 done: every bad row is stored with its line number and reason in the same transaction as its batch, and `GET /api/imports/{id}/errors` streams them as a CSV once the job has finished
 
 ---
 

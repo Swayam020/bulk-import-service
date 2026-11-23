@@ -9,6 +9,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Import;
+import org.springframework.data.domain.Limit;
 
 import java.io.BufferedOutputStream;
 import java.io.ByteArrayOutputStream;
@@ -31,6 +32,7 @@ class LargeImportTest {
 
 	@Autowired ImportJobRepository jobs;
 	@Autowired CustomerRepository customers;
+	@Autowired ImportRowErrorRepository rowErrors;
 	@Autowired ImportWorker worker;
 
 	private final List<Path> storedFiles = new ArrayList<>();
@@ -124,6 +126,13 @@ class LargeImportTest {
 				.map(Customer::getExternalId).toList();
 		assertThat(externalIds).doesNotContain(499L, 800L, 1200L);
 		assertThat(externalIds).contains(498L, 500L, 1199L);
+
+		// row i is on file line i + 2 (header, 1-based), and each error committed with its own
+		// batch, including the one on the first batch's last line
+		List<Long> errorLines = rowErrors
+				.findByImportJobIdAndLineNumberGreaterThanOrderByLineNumberAsc(id, 0, Limit.of(10)).stream()
+				.map(ImportRowError::getLineNumber).toList();
+		assertThat(errorLines).containsExactly(501L, 802L, 1202L);
 	}
 
 	@Test
