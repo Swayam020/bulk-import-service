@@ -6,7 +6,7 @@ come back as a downloadable error report keyed by line number.
 
 **Stack:** Java 17 · Spring Boot · PostgreSQL · Spring Data JPA · Docker · JUnit 5
 
-**Status:** M7 done: each batch commits the file line it reached, so a job killed mid-import is requeued on restart and resumes after its last committed batch with no duplicate rows; a job interrupted 3 times is failed instead
+**Status:** M8 done: `podman compose up -d --build` runs Postgres and the app from a clean clone; uploaded files live in a named volume, so a job interrupted by a container restart still resumes
 
 ---
 
@@ -42,6 +42,40 @@ Answers go in `NOTES.md` as you build. Don't reconstruct them the night before a
 
 ---
 
+## How an import flows
+
+```mermaid
+sequenceDiagram
+    actor C as Client
+    participant A as API
+    participant F as Upload volume
+    participant W as Worker (same JVM)
+    participant D as PostgreSQL
+
+    C->>A: POST /api/imports (multipart CSV)
+    A->>F: store as <uuid>.csv (never the client's filename)
+    A->>D: insert import_job, status QUEUED
+    A-->>C: 202 Accepted, Location: /api/imports/{id}
+    loop every second
+        W->>D: claim oldest QUEUED job (FOR UPDATE SKIP LOCKED), set RUNNING
+    end
+    loop every 500 file lines, one transaction each
+        W->>F: stream the next lines (the file is never fully in memory)
+        W->>D: insert good rows + row errors, add counts, set last_committed_line
+    end
+    W->>D: status COMPLETED (or FAILED with a message)
+    C->>A: GET /api/imports/{id} (poll)
+    A-->>C: status and counts
+    C->>A: GET /api/imports/{id}/errors
+    A-->>C: CSV of failed lines, keyed by line number
+```
+
+A bad row is recorded and skipped inside its batch, so it never rolls back the rows around it.
+If the process dies mid-import, the next start finds the job still `RUNNING`, puts it back in the
+queue, and resumes after `last_committed_line`; a job interrupted 3 times is failed instead.
+
+---
+
 ## Build plan
 
 One milestone per sitting, one commit per real day.
@@ -63,6 +97,26 @@ One milestone per sitting, one commit per real day.
 **M4 and M5 are the interesting ones.** M4 is where you learn why `Files.readAllLines()` is a
 trap, and M5 is where you learn what `@Transactional` actually scopes. Don't rush past them
 to get to the Docker milestone.
+
+---
+
+## Run with Docker
+
+Everything from a clean clone, no Java needed. Uses ports **8080** (app) and **5433** (Postgres).
+
+```bash
+podman compose up -d --build                 # or: docker compose up -d --build
+curl localhost:8080/actuator/health
+
+printf 'id,name,email,amount\n1,Alice,alice@example.com,10.00\n2,Bob,not-an-email,5.00\n' > sample.csv
+curl -i -F file=@sample.csv localhost:8080/api/imports      # 202, job id in Location
+curl localhost:8080/api/imports/<id>                        # poll until COMPLETED
+curl localhost:8080/api/imports/<id>/errors                 # line 3: the bad email
+
+podman compose down        # add -v to also delete the database and stored uploads
+```
+
+`podman compose stop` sends SIGTERM and waits up to 30 s, so a running import finishes first.
 
 ---
 

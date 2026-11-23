@@ -1,0 +1,10 @@
+target/
+data/
+.git/
+.github/
+.superpowers/
+.idea/
+.vscode/
+*.iml
+big.csv
+.env
