@@ -4,9 +4,9 @@ Accepts a CSV upload, returns **`202 Accepted` with a job ID immediately**, and 
 file in the background. A malformed row fails alone while the rest commit, and the failures
 come back as a downloadable error report keyed by line number.
 
-**Stack:** Java 17 · Spring Boot · PostgreSQL · Spring Data JPA · Docker · JUnit 5
+**Stack:** Java 17 · Spring Boot · PostgreSQL · Spring Data JPA · Docker · JUnit 5 · React + TypeScript (Vite) · Vitest
 
-**Status:** M8 done: `podman compose up -d --build` runs Postgres and the app from a clean clone; uploaded files live in a named volume, so a job interrupted by a container restart still resumes
+**Status:** M9 done: a React page uploads a CSV, polls the job until it finishes, and links the error report; a 200k-row file is tracked end to end from the browser
 
 ---
 
@@ -120,6 +120,22 @@ podman compose down        # add -v to also delete the database and stored uploa
 
 ---
 
+## Run the frontend
+
+A React page (Vite + TypeScript) to upload a CSV, watch the job's counts climb, and download
+the error report. Needs Node 22 and the backend from either section above.
+
+```bash
+npm ci --prefix frontend
+npm --prefix frontend run dev        # http://localhost:5173
+```
+
+The backend only answers browser calls from `http://localhost:5173`. Serving the page from
+anywhere else means setting `FRONTEND_ORIGIN` on the backend, and `VITE_API_BASE_URL` at build
+time if the API is not on `localhost:8080`.
+
+---
+
 ## Run locally
 
 Java 17+ and podman. No Maven install needed — the wrapper fetches it.
@@ -137,6 +153,7 @@ Tests start their own throwaway Postgres via Testcontainers, so they don't need 
 
 ```bash
 ./mvnw test
+npm --prefix frontend test   # frontend tests stub fetch, no backend needed
 ```
 
 Generate a test file when you get to M4:
